@@ -2,6 +2,7 @@ import os
 import re
 import sys
 import json
+import NHDB
 import time
 import shutil
 import argparse
@@ -75,10 +76,12 @@ def get_book_info(book, response):
 		book_info['languages'] 	= [tag.span.text for tag in gallery_info[5]]
 		book_info['categories'] = [tag.span.text for tag in gallery_info[6]]
 
-		book_info['download_date'] 	= datetime.strftime(datetime.now(), "%d/%m/%y %X")
+		book_info['download_date'] 	= datetime.strftime(datetime.now(), "%Y/%m/%d %X")
 		book_info['upload_unix'] 	= int(re.search(r"upload_date.......(\d+)", response.text)[1])
-		book_info['upload_date'] 	= datetime.strftime(datetime.fromtimestamp(book_info['upload_unix']), "%d/%m/%y %X")
+		book_info['upload_date'] 	= datetime.strftime(datetime.fromtimestamp(book_info['upload_unix']), "%Y/%m/%d %X")
 		book_info['uploaded'] 		= gallery_info[8].text
+
+		NHDB.add_book(book_info)
 
 		json_content= json.dumps(book_info, indent = 4, ensure_ascii=False)
 		json_path = os.path.join(book, '{}.json'.format(book))
@@ -96,13 +99,27 @@ def get_book_info(book, response):
 		raise
 
 def main():
+	
 	for book in nh_options.books:
-		download_book(book)
+		if nh_options.remove:
+			NHDB.delete_book(book)
+		elif nh_options.stars:
+			NHDB.rate_book(book, nh_options.stars[0])
+		else:
+			download_book(book)
+
+	NHDB.conn.close()
 
 if __name__ == '__main__':
 	parser = argparse.ArgumentParser()
+	
 	parser.add_argument('-b', '--books', help="IDs of the books you want to download.", nargs='+', metavar=('BOOK_ID'))
 	parser.add_argument('-j', '--json', help="Downloads only the JSON file, not the images.", action='store_true')
 	parser.add_argument('-p', '--peek', help="Downloads only the first page / cover of the book.", action='store_true')
+
+	# Database Operations
+	parser.add_argument('-rm', '--remove', help="Deletes both the book (folder) and entry in your DB.", action='store_true')
+	parser.add_argument('-st', '--stars', help="Updates the rating value (0 to 5) of one book", nargs=1, metavar=('STARS'))
+
 	nh_options = parser.parse_args()
 	main()
