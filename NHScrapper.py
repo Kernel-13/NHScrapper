@@ -4,12 +4,14 @@ import sys
 import json
 import time
 import shutil
+import argparse
 import requests
 from tqdm import tqdm
 from datetime import datetime
 from bs4 import BeautifulSoup
 
 ImageFileExtensions = ['.png', '.jpg', '.gif']
+nh_options = None
 
 def download_book(book):
 	"""Downloads an entire book."""
@@ -21,8 +23,9 @@ def download_book(book):
 
 		os.makedirs(book, exist_ok=True)
 		book_info = get_book_info(book, response)
+		num_pages = 1 if nh_options.peek else book_info['pages']
 
-		for i in tqdm(range(1, book_info['pages']+1), desc="Downloading Book {} ".format(book)):
+		for i in tqdm(range(1, num_pages+1), desc="Downloading Book {} ".format(book)):
 			try:
 				for ext in ImageFileExtensions:
 					filename =  str(i) + ext
@@ -64,13 +67,13 @@ def get_book_info(book, response):
 		book_info['gallery_id'] = int(soup.find_all('img')[2]['src'].split('/')[-2])
 		book_info['pages'] 		= int(gallery_info[7].span.text)
 		
-		book_info['parodies'] 	= [x.span.text for x in gallery_info[0]]
-		book_info['characters'] = [x.span.text for x in gallery_info[1]]
-		book_info['tags'] 		= [x.span.text for x in gallery_info[2]]
-		book_info['artists'] 	= [x.span.text for x in gallery_info[3]]
-		book_info['groups'] 	= [x.span.text for x in gallery_info[4]]
-		book_info['languages'] 	= [x.span.text for x in gallery_info[5]]
-		book_info['categories'] = [x.span.text for x in gallery_info[6]]
+		book_info['parodies'] 	= [tag.span.text for tag in gallery_info[0]]
+		book_info['characters'] = [tag.span.text for tag in gallery_info[1]]
+		book_info['tags'] 		= [tag.span.text for tag in gallery_info[2]]
+		book_info['artists'] 	= [tag.span.text for tag in gallery_info[3]]
+		book_info['groups'] 	= [tag.span.text for tag in gallery_info[4]]
+		book_info['languages'] 	= [tag.span.text for tag in gallery_info[5]]
+		book_info['categories'] = [tag.span.text for tag in gallery_info[6]]
 
 		book_info['download_date'] 	= datetime.strftime(datetime.now(), "%d/%m/%y %X")
 		book_info['upload_unix'] 	= int(re.search(r"upload_date.......(\d+)", response.text)[1])
@@ -83,12 +86,23 @@ def get_book_info(book, response):
 		with open(json_path, 'w', encoding='utf-8') as fd:
 			fd.write(json_content)
 
+		if nh_options.json:
+			book_info['pages'] = 0
+
 		return book_info
 	except KeyboardInterrupt:
 		raise
 	except Exception as e:
 		raise
 
-if __name__ == '__main__':
-	for book in sys.argv[1:]:
+def main():
+	for book in nh_options.books:
 		download_book(book)
+
+if __name__ == '__main__':
+	parser = argparse.ArgumentParser()
+	parser.add_argument('-b', '--books', help="IDs of the books you want to download.", nargs='+', metavar=('BOOK_ID'))
+	parser.add_argument('-j', '--json', help="Downloads only the JSON file, not the images.", action='store_true')
+	parser.add_argument('-p', '--peek', help="Downloads only the first page / cover of the book.", action='store_true')
+	nh_options = parser.parse_args()
+	main()
